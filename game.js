@@ -4,7 +4,8 @@ class Maze {
     constructor(width = 20, height = 20) {
         this.width = width;
         this.height = height;
-        this.grid = Array(height).fill(null).map(() => Array(width).fill(1));
+        // Initialize as empty (0 = empty, 1 = wall)
+        this.grid = Array(height).fill(null).map(() => Array(width).fill(0));
         this.start_pos = [1, 1];
         this.end_pos = [width - 2, height - 2];
     }
@@ -338,6 +339,10 @@ class Game {
         this.mode = 'game';
         this.keys = {};
         this.lastTime = 0;
+        this.lastModeToggle = 0;
+        this.modeToggleDelay = 300; // 300ms delay between mode toggles
+        this.lastEditorMove = 0;
+        this.editorMoveDelay = 100; // 100ms delay between editor cursor moves
         
         this.maze.generateDefault();
         this.setupEventListeners();
@@ -347,7 +352,12 @@ class Game {
     setupEventListeners() {
         // Keyboard events
         document.addEventListener('keydown', (e) => {
-            this.keys[e.key.toLowerCase()] = true;
+            const key = e.key.toLowerCase();
+            // Prevent default for game keys to avoid browser shortcuts
+            if (['w', 'a', 's', 'd', 'q', 'e', 'm'].includes(key)) {
+                e.preventDefault();
+            }
+            this.keys[key] = true;
             if (e.key === 'Escape') {
                 e.preventDefault();
                 if (this.mode === 'game') {
@@ -360,6 +370,18 @@ class Game {
         
         document.addEventListener('keyup', (e) => {
             this.keys[e.key.toLowerCase()] = false;
+        });
+        
+        // Clear all keys when window loses focus to prevent stuck keys
+        window.addEventListener('blur', () => {
+            this.keys = {};
+        });
+        
+        // Also clear keys on visibility change
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this.keys = {};
+            }
         });
         
         // Editor canvas click
@@ -410,6 +432,8 @@ class Game {
     }
     
     handleInput() {
+        const now = Date.now();
+        
         if (this.mode === 'game') {
             if (this.keys['w']) this.player.moveForward(this.maze, this.player.moveSpeed);
             if (this.keys['s']) this.player.moveBackward(this.maze, this.player.moveSpeed);
@@ -417,37 +441,46 @@ class Game {
             if (this.keys['d']) this.player.strafeRight(this.maze, this.player.moveSpeed);
             if (this.keys['q']) this.player.angle -= this.player.rotateSpeed;
             if (this.keys['e']) this.player.angle += this.player.rotateSpeed;
-            if (this.keys['m']) {
+            
+            // Debounce mode toggle
+            if (this.keys['m'] && (now - this.lastModeToggle) > this.modeToggleDelay) {
                 this.mode = 'editor';
+                this.lastModeToggle = now;
+                this.keys['m'] = false; // Clear the key to prevent rapid toggling
                 this.updateUI();
             }
         } else if (this.mode === 'editor') {
-            let moved = false;
-            if (this.keys['w']) {
-                this.editor.moveCursor(0, -1);
-                moved = true;
-                this.updateEditorUI();
+            // Debounce editor cursor movement
+            if ((now - this.lastEditorMove) > this.editorMoveDelay) {
+                let moved = false;
+                if (this.keys['w']) {
+                    this.editor.moveCursor(0, -1);
+                    moved = true;
+                    this.updateEditorUI();
+                } else if (this.keys['s']) {
+                    this.editor.moveCursor(0, 1);
+                    moved = true;
+                    this.updateEditorUI();
+                } else if (this.keys['a']) {
+                    this.editor.moveCursor(-1, 0);
+                    moved = true;
+                    this.updateEditorUI();
+                } else if (this.keys['d']) {
+                    this.editor.moveCursor(1, 0);
+                    moved = true;
+                    this.updateEditorUI();
+                }
+                
+                if (moved) {
+                    this.lastEditorMove = now;
+                }
             }
-            if (this.keys['s']) {
-                this.editor.moveCursor(0, 1);
-                moved = true;
-                this.updateEditorUI();
-            }
-            if (this.keys['a']) {
-                this.editor.moveCursor(-1, 0);
-                moved = true;
-                this.updateEditorUI();
-            }
-            if (this.keys['d']) {
-                this.editor.moveCursor(1, 0);
-                moved = true;
-                this.updateEditorUI();
-            }
-            if (moved) {
-                this.keys['w'] = this.keys['s'] = this.keys['a'] = this.keys['d'] = false;
-            }
-            if (this.keys['m']) {
+            
+            // Debounce mode toggle
+            if (this.keys['m'] && (now - this.lastModeToggle) > this.modeToggleDelay) {
                 this.mode = 'game';
+                this.lastModeToggle = now;
+                this.keys['m'] = false; // Clear the key to prevent rapid toggling
                 this.updateUI();
             }
         }
