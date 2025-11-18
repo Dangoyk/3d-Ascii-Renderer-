@@ -410,6 +410,7 @@ class Editor {
         this.maze.grid = state.grid.map(row => [...row]);
         this.maze.width = state.width;
         this.maze.height = state.height;
+        this.render();
     }
     
     render() {
@@ -421,12 +422,25 @@ class Editor {
         // Draw grid
         for (let y = 0; y < this.maze.height; y++) {
             for (let x = 0; x < this.maze.width; x++) {
-                if (this.maze.isWall(x, y)) {
-                    this.ctx.fillStyle = '#00ff88';
+                const cellType = this.maze.getCellType(x, y);
+                if (cellType === 1) {
+                    this.ctx.fillStyle = '#00ff88'; // Wall - green
+                } else if (cellType === 2) {
+                    this.ctx.fillStyle = '#ffaa00'; // Ramp - orange
                 } else {
-                    this.ctx.fillStyle = '#1a1a2e';
+                    this.ctx.fillStyle = '#1a1a2e'; // Empty
                 }
                 this.ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                
+                // Draw ramp indicator
+                if (cellType === 2) {
+                    this.ctx.fillStyle = '#fff';
+                    this.ctx.font = `${cellSize * 0.6}px monospace`;
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    this.ctx.fillText('^', x * cellSize + cellSize / 2, y * cellSize + cellSize / 2);
+                    this.ctx.font = '10px monospace';
+                }
                 
                 // Grid lines
                 this.ctx.strokeStyle = '#333';
@@ -463,11 +477,15 @@ class Editor {
         if (saveState) {
             this.saveState();
         }
+        // Re-render after change
+        this.render();
     }
     
     moveCursor(dx, dy) {
         this.cursorX = Math.max(0, Math.min(this.maze.width - 1, this.cursorX + dx));
         this.cursorY = Math.max(0, Math.min(this.maze.height - 1, this.cursorY + dy));
+        // Re-render to update cursor position
+        this.render();
     }
     
     handleClick(x, y, gameInstance) {
@@ -512,6 +530,8 @@ class Editor {
                     this.toggleCell(false); // Don't save state for each drag cell
                     this.lastPaintX = cellX;
                     this.lastPaintY = cellY;
+                    // Re-render after change
+                    this.render();
                     if (gameInstance) {
                         gameInstance.updateEditorUI();
                     }
@@ -524,6 +544,7 @@ class Editor {
         if (this.isDragging) {
             this.isDragging = false;
             this.saveState(); // Save state after drag is complete
+            this.render(); // Re-render after drag
         }
     }
     
@@ -536,12 +557,14 @@ class Editor {
             }
         }
         this.saveState();
+        this.render();
     }
     
     resetMaze() {
         // Reset to default maze
         this.maze.generateDefault();
         this.saveState();
+        this.render();
     }
 }
 
@@ -693,26 +716,32 @@ class Game {
         
         this.editorCanvas.addEventListener('mousemove', (e) => {
             if (this.mode === 'editor') {
+                e.stopPropagation();
                 this.editor.handleMouseMove(e.clientX, e.clientY, this);
             }
         });
         
-        this.editorCanvas.addEventListener('mouseup', () => {
+        this.editorCanvas.addEventListener('mouseup', (e) => {
             if (this.mode === 'editor') {
+                e.stopPropagation();
                 this.editor.handleMouseUp();
             }
         });
         
-        this.editorCanvas.addEventListener('mouseleave', () => {
+        this.editorCanvas.addEventListener('mouseleave', (e) => {
             if (this.mode === 'editor') {
+                e.stopPropagation();
                 this.editor.handleMouseUp();
             }
         });
         
         // Editor canvas click (fallback)
         this.editorCanvas.addEventListener('click', (e) => {
-            if (this.mode === 'editor' && !this.editor.isDragging) {
-                this.editor.handleClick(e.clientX, e.clientY, this);
+            if (this.mode === 'editor') {
+                e.stopPropagation();
+                if (!this.editor.isDragging) {
+                    this.editor.handleClick(e.clientX, e.clientY, this);
+                }
             }
         });
         
@@ -1078,7 +1107,7 @@ class Game {
                 `(${this.player.x.toFixed(2)}, ${this.player.y.toFixed(2)})`;
             document.getElementById('angle').textContent = 
                 `${(this.player.angle * 180 / Math.PI).toFixed(1)}°`;
-        } else {
+        } else if (this.mode === 'editor') {
             this.editor.render();
             this.updateEditorUI();
         }
