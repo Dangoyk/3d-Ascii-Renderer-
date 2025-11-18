@@ -179,10 +179,11 @@ class Renderer {
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.width, this.height);
         
-        const columnWidth = this.width / 80;
+        const numColumns = Math.floor(this.width / 10); // Adjust column count based on width
+        const columnWidth = this.width / numColumns;
         
-        for (let col = 0; col < 80; col++) {
-            const rayAngle = player.angle - player.fov / 2 + (col / 80) * player.fov;
+        for (let col = 0; col < numColumns; col++) {
+            const rayAngle = player.angle - player.fov / 2 + (col / numColumns) * player.fov;
             const distance = this.castRay(maze, player.x, player.y, rayAngle, player.angle);
             
             const wallHeight = Math.min(this.height / (distance + 0.0001), this.height);
@@ -343,6 +344,8 @@ class Game {
         this.modeToggleDelay = 300; // 300ms delay between mode toggles
         this.lastEditorMove = 0;
         this.editorMoveDelay = 100; // 100ms delay between editor cursor moves
+        this.isFullscreen = false;
+        this.mainView = document.getElementById('main-view');
         
         this.maze.generateDefault();
         this.setupEventListeners();
@@ -353,14 +356,40 @@ class Game {
         // Keyboard events
         document.addEventListener('keydown', (e) => {
             const key = e.key.toLowerCase();
+            const keyCode = e.key;
+            
+            // Handle arrow keys
+            if (keyCode === 'ArrowLeft') {
+                e.preventDefault();
+                this.keys['arrowleft'] = true;
+            } else if (keyCode === 'ArrowRight') {
+                e.preventDefault();
+                this.keys['arrowright'] = true;
+            } else if (keyCode === 'ArrowUp') {
+                e.preventDefault();
+                this.keys['arrowup'] = true;
+            } else if (keyCode === 'ArrowDown') {
+                e.preventDefault();
+                this.keys['arrowdown'] = true;
+            }
+            
             // Prevent default for game keys to avoid browser shortcuts
-            if (['w', 'a', 's', 'd', 'q', 'e', 'm'].includes(key)) {
+            if (['w', 'a', 's', 'd', 'q', 'e', 'm', 'f'].includes(key)) {
                 e.preventDefault();
             }
             this.keys[key] = true;
+            
+            // Fullscreen toggle
+            if (key === 'f' && this.mode === 'game') {
+                this.toggleFullscreen();
+            }
+            
             if (e.key === 'Escape') {
                 e.preventDefault();
-                if (this.mode === 'game') {
+                // Exit fullscreen if in fullscreen
+                if (this.isFullscreen) {
+                    this.exitFullscreen();
+                } else if (this.mode === 'game') {
                     this.player.x = this.maze.start_pos[0] + 0.5;
                     this.player.y = this.maze.start_pos[1] + 0.5;
                     this.player.angle = 0;
@@ -369,7 +398,21 @@ class Game {
         });
         
         document.addEventListener('keyup', (e) => {
-            this.keys[e.key.toLowerCase()] = false;
+            const key = e.key.toLowerCase();
+            const keyCode = e.key;
+            
+            // Handle arrow keys
+            if (keyCode === 'ArrowLeft') {
+                this.keys['arrowleft'] = false;
+            } else if (keyCode === 'ArrowRight') {
+                this.keys['arrowright'] = false;
+            } else if (keyCode === 'ArrowUp') {
+                this.keys['arrowup'] = false;
+            } else if (keyCode === 'ArrowDown') {
+                this.keys['arrowdown'] = false;
+            }
+            
+            this.keys[key] = false;
         });
         
         // Clear all keys when window loses focus to prevent stuck keys
@@ -384,10 +427,47 @@ class Game {
             }
         });
         
+        // Fullscreen button
+        document.getElementById('fullscreen-btn').addEventListener('click', () => {
+            this.toggleFullscreen();
+        });
+        
         // Editor canvas click
         this.editorCanvas.addEventListener('click', (e) => {
             if (this.mode === 'editor') {
                 this.editor.handleClick(e.clientX, e.clientY, this);
+            }
+        });
+        
+        // Handle fullscreen change events
+        document.addEventListener('fullscreenchange', () => {
+            this.isFullscreen = !!document.fullscreenElement;
+            this.updateFullscreenUI();
+            this.resizeCanvas();
+        });
+        
+        document.addEventListener('webkitfullscreenchange', () => {
+            this.isFullscreen = !!document.webkitFullscreenElement;
+            this.updateFullscreenUI();
+            this.resizeCanvas();
+        });
+        
+        document.addEventListener('mozfullscreenchange', () => {
+            this.isFullscreen = !!document.mozFullScreenElement;
+            this.updateFullscreenUI();
+            this.resizeCanvas();
+        });
+        
+        document.addEventListener('MSFullscreenChange', () => {
+            this.isFullscreen = !!document.msFullscreenElement;
+            this.updateFullscreenUI();
+            this.resizeCanvas();
+        });
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (this.isFullscreen) {
+                this.resizeCanvas();
             }
         });
         
@@ -435,12 +515,13 @@ class Game {
         const now = Date.now();
         
         if (this.mode === 'game') {
-            if (this.keys['w']) this.player.moveForward(this.maze, this.player.moveSpeed);
-            if (this.keys['s']) this.player.moveBackward(this.maze, this.player.moveSpeed);
+            if (this.keys['w'] || this.keys['arrowup']) this.player.moveForward(this.maze, this.player.moveSpeed);
+            if (this.keys['s'] || this.keys['arrowdown']) this.player.moveBackward(this.maze, this.player.moveSpeed);
             if (this.keys['a']) this.player.strafeLeft(this.maze, this.player.moveSpeed);
             if (this.keys['d']) this.player.strafeRight(this.maze, this.player.moveSpeed);
-            if (this.keys['q']) this.player.angle -= this.player.rotateSpeed;
-            if (this.keys['e']) this.player.angle += this.player.rotateSpeed;
+            // Rotation with Q/E or Arrow keys
+            if (this.keys['q'] || this.keys['arrowleft']) this.player.angle -= this.player.rotateSpeed;
+            if (this.keys['e'] || this.keys['arrowright']) this.player.angle += this.player.rotateSpeed;
             
             // Debounce mode toggle
             if (this.keys['m'] && (now - this.lastModeToggle) > this.modeToggleDelay) {
@@ -483,6 +564,79 @@ class Game {
                 this.keys['m'] = false; // Clear the key to prevent rapid toggling
                 this.updateUI();
             }
+        }
+    }
+    
+    toggleFullscreen() {
+        if (!this.isFullscreen) {
+            this.enterFullscreen();
+        } else {
+            this.exitFullscreen();
+        }
+    }
+    
+    enterFullscreen() {
+        const element = this.mainView;
+        
+        if (element.requestFullscreen) {
+            element.requestFullscreen();
+        } else if (element.webkitRequestFullscreen) {
+            element.webkitRequestFullscreen();
+        } else if (element.mozRequestFullScreen) {
+            element.mozRequestFullScreen();
+        } else if (element.msRequestFullscreen) {
+            element.msRequestFullscreen();
+        } else {
+            // Fallback: use CSS fullscreen
+            this.mainView.classList.add('fullscreen');
+            this.isFullscreen = true;
+            this.updateFullscreenUI();
+            this.resizeCanvas();
+        }
+    }
+    
+    exitFullscreen() {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen();
+        } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+        } else {
+            // Fallback: remove CSS fullscreen
+            this.mainView.classList.remove('fullscreen');
+            this.isFullscreen = false;
+            this.updateFullscreenUI();
+            this.resizeCanvas();
+        }
+    }
+    
+    updateFullscreenUI() {
+        const btn = document.getElementById('fullscreen-btn');
+        if (this.isFullscreen) {
+            btn.textContent = '⛶';
+            btn.title = 'Exit Fullscreen';
+        } else {
+            btn.textContent = '⛶';
+            btn.title = 'Toggle Fullscreen';
+        }
+    }
+    
+    resizeCanvas() {
+        if (this.isFullscreen) {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            this.gameCanvas.width = width;
+            this.gameCanvas.height = height;
+            this.renderer.width = width;
+            this.renderer.height = height;
+        } else {
+            this.gameCanvas.width = 800;
+            this.gameCanvas.height = 600;
+            this.renderer.width = 800;
+            this.renderer.height = 600;
         }
     }
     

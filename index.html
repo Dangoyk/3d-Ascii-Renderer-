@@ -16,7 +16,7 @@
         </div>
         
         <div class="game-container">
-            <div class="main-view">
+            <div class="main-view" id="main-view">
                 <canvas id="gameCanvas" width="800" height="600"></canvas>
                 <div class="overlay-info">
                     <div class="info-panel">
@@ -24,11 +24,10 @@
                         <div>Angle: <span id="angle">0°</span></div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="minimap-container">
-                <h3>Minimap</h3>
-                <canvas id="minimapCanvas" width="200" height="200"></canvas>
+                <div class="minimap-overlay">
+                    <canvas id="minimapCanvas" width="200" height="200"></canvas>
+                </div>
+                <button id="fullscreen-btn" class="fullscreen-btn" title="Toggle Fullscreen">⛶</button>
             </div>
         </div>
         
@@ -56,8 +55,9 @@
                     <div><kbd>S</kbd> Move Backward</div>
                     <div><kbd>A</kbd> Strafe Left</div>
                     <div><kbd>D</kbd> Strafe Right</div>
-                    <div><kbd>Q</kbd> Rotate Left</div>
-                    <div><kbd>E</kbd> Rotate Right</div>
+                    <div><kbd>Q</kbd> / <kbd>←</kbd> Rotate Left</div>
+                    <div><kbd>E</kbd> / <kbd>→</kbd> Rotate Right</div>
+                    <div><kbd>F</kbd> Toggle Fullscreen</div>
                     <div><kbd>M</kbd> Toggle Editor</div>
                     <div><kbd>ESC</kbd> Reset Position</div>
                 </div>
