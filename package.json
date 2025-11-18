@@ -1,0 +1,19 @@
+{
+  "name": "3d-ascii-maze-game",
+  "version": "1.0.0",
+  "description": "A 3D ASCII maze game with raycasting, minimap, and editor",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve ."
+  },
+  "keywords": [
+    "maze",
+    "game",
+    "3d",
+    "raycasting",
+    "ascii"
+  ],
+  "author": "",
+  "license": "MIT"
+}
+

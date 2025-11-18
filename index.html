@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D ASCII Maze Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>3D ASCII Maze Game</h1>
+            <div class="mode-indicator">
+                <span id="mode-text">GAME MODE</span>
+            </div>
+        </div>
+        
+        <div class="game-container">
+            <div class="main-view">
+                <canvas id="gameCanvas" width="800" height="600"></canvas>
+                <div class="overlay-info">
+                    <div class="info-panel">
+                        <div>Position: <span id="position">(0, 0)</span></div>
+                        <div>Angle: <span id="angle">0°</span></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="minimap-container">
+                <h3>Minimap</h3>
+                <canvas id="minimapCanvas" width="200" height="200"></canvas>
+            </div>
+        </div>
+        
+        <div class="editor-container" id="editor-container" style="display: none;">
+            <h2>Maze Editor</h2>
+            <div class="editor-controls">
+                <button id="draw-mode-btn" class="btn active">Draw Mode</button>
+                <button id="erase-mode-btn" class="btn">Erase Mode</button>
+                <button id="save-btn" class="btn">Save Maze</button>
+                <button id="load-btn" class="btn">Load Maze</button>
+                <input type="file" id="file-input" accept=".json" style="display: none;">
+            </div>
+            <div class="editor-info">
+                <span>Mode: <span id="editor-mode">DRAW</span></span>
+                <span>Cursor: (<span id="cursor-pos">0, 0</span>)</span>
+            </div>
+            <canvas id="editorCanvas" width="600" height="600"></canvas>
+        </div>
+        
+        <div class="controls">
+            <div class="control-section">
+                <h3>Game Controls</h3>
+                <div class="control-grid">
+                    <div><kbd>W</kbd> Move Forward</div>
+                    <div><kbd>S</kbd> Move Backward</div>
+                    <div><kbd>A</kbd> Strafe Left</div>
+                    <div><kbd>D</kbd> Strafe Right</div>
+                    <div><kbd>Q</kbd> Rotate Left</div>
+                    <div><kbd>E</kbd> Rotate Right</div>
+                    <div><kbd>M</kbd> Toggle Editor</div>
+                    <div><kbd>ESC</kbd> Reset Position</div>
+                </div>
+            </div>
+            <div class="control-section">
+                <h3>Editor Controls</h3>
+                <div class="control-grid">
+                    <div><kbd>W/A/S/D</kbd> Move Cursor</div>
+                    <div><kbd>Click</kbd> Toggle Cell</div>
+                    <div><kbd>M</kbd> Back to Game</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="game.js"></script>
+</body>
+</html>
+
