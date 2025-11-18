@@ -35,23 +35,49 @@
                     <canvas id="minimapCanvas" width="200" height="200"></canvas>
                 </div>
                 <button id="fullscreen-btn" class="fullscreen-btn" title="Toggle Fullscreen">⛶</button>
+                <button id="editor-mode-btn" class="editor-mode-btn" title="Open Editor">✏️ Editor</button>
             </div>
         </div>
         
         <div class="editor-container" id="editor-container" style="display: none;">
-            <h2>Maze Editor</h2>
+            <div class="editor-header">
+                <h2>Maze Editor</h2>
+                <button id="close-editor-btn" class="btn-close" title="Close Editor">✕</button>
+            </div>
             <div class="editor-controls">
-                <button id="draw-mode-btn" class="btn active">Draw Mode</button>
-                <button id="erase-mode-btn" class="btn">Erase Mode</button>
-                <button id="save-btn" class="btn">Save Maze</button>
-                <button id="load-btn" class="btn">Load Maze</button>
-                <input type="file" id="file-input" accept=".json" style="display: none;">
+                <div class="editor-toolbar">
+                    <button id="draw-mode-btn" class="btn active">✏️ Draw</button>
+                    <button id="erase-mode-btn" class="btn">🗑️ Erase</button>
+                    <div class="divider"></div>
+                    <button id="clear-btn" class="btn">🗑️ Clear All</button>
+                    <button id="reset-btn" class="btn">🔄 Reset</button>
+                    <div class="divider"></div>
+                    <button id="undo-btn" class="btn" title="Undo (Ctrl+Z)">↶ Undo</button>
+                    <button id="redo-btn" class="btn" title="Redo (Ctrl+Y)">↷ Redo</button>
+                </div>
+                <div class="file-controls">
+                    <button id="save-btn" class="btn btn-primary">💾 Save Maze</button>
+                    <button id="load-btn" class="btn btn-primary">📂 Load Maze</button>
+                    <input type="file" id="file-input" accept=".json" style="display: none;">
+                    <div class="drop-zone" id="drop-zone">
+                        <div class="drop-zone-icon">📁</div>
+                        <div class="drop-zone-text">Drag & Drop JSON file here</div>
+                        <div class="drop-zone-hint">or click Load Maze</div>
+                    </div>
+                </div>
             </div>
             <div class="editor-info">
                 <span>Mode: <span id="editor-mode">DRAW</span></span>
                 <span>Cursor: (<span id="cursor-pos">0, 0</span>)</span>
+                <span>History: <span id="history-count">0</span> actions</span>
             </div>
-            <canvas id="editorCanvas" width="600" height="600"></canvas>
+            <div class="editor-canvas-wrapper">
+                <canvas id="editorCanvas" width="600" height="600"></canvas>
+                <div class="editor-hints">
+                    <div><kbd>Click</kbd> to toggle • <kbd>Drag</kbd> to paint • <kbd>Space</kbd> toggle cell</div>
+                    <div><kbd>Ctrl+Z</kbd> Undo • <kbd>Ctrl+Y</kbd> Redo • <kbd>Ctrl+S</kbd> Save</div>
+                </div>
+            </div>
         </div>
         
         <div class="controls">

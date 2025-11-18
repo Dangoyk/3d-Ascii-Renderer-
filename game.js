@@ -297,9 +297,64 @@ class Editor {
         this.cursorY = 1;
         this.mode = 'draw';
         this.cellSize = 600 / Math.max(maze.width, maze.height);
+        this.isDragging = false;
+        this.lastPaintX = -1;
+        this.lastPaintY = -1;
+        this.history = [];
+        this.historyIndex = -1;
+        this.maxHistory = 50;
         
         canvas.width = 600;
         canvas.height = 600;
+        
+        // Save initial state
+        this.saveState();
+    }
+    
+    saveState() {
+        // Save current maze state for undo/redo
+        const state = {
+            grid: this.maze.grid.map(row => [...row]),
+            width: this.maze.width,
+            height: this.maze.height
+        };
+        
+        // Remove any states after current index (when undoing then making new changes)
+        this.history = this.history.slice(0, this.historyIndex + 1);
+        
+        // Add new state
+        this.history.push(state);
+        this.historyIndex++;
+        
+        // Limit history size
+        if (this.history.length > this.maxHistory) {
+            this.history.shift();
+            this.historyIndex--;
+        }
+    }
+    
+    undo() {
+        if (this.historyIndex > 0) {
+            this.historyIndex--;
+            this.restoreState(this.history[this.historyIndex]);
+            return true;
+        }
+        return false;
+    }
+    
+    redo() {
+        if (this.historyIndex < this.history.length - 1) {
+            this.historyIndex++;
+            this.restoreState(this.history[this.historyIndex]);
+            return true;
+        }
+        return false;
+    }
+    
+    restoreState(state) {
+        this.maze.grid = state.grid.map(row => [...row]);
+        this.maze.width = state.width;
+        this.maze.height = state.height;
     }
     
     render() {
@@ -333,11 +388,14 @@ class Editor {
         this.ctx.strokeRect(this.cursorX * cellSize, this.cursorY * cellSize, cellSize, cellSize);
     }
     
-    toggleCell() {
+    toggleCell(saveState = true) {
         if (this.mode === 'draw') {
             this.maze.setWall(this.cursorX, this.cursorY, true);
         } else {
             this.maze.setWall(this.cursorX, this.cursorY, false);
+        }
+        if (saveState) {
+            this.saveState();
         }
     }
     
@@ -358,10 +416,65 @@ class Editor {
             this.cursorX = cellX;
             this.cursorY = cellY;
             this.toggleCell();
+            this.lastPaintX = cellX;
+            this.lastPaintY = cellY;
             if (gameInstance) {
                 gameInstance.updateEditorUI();
             }
         }
+    }
+    
+    handleMouseDown(x, y, gameInstance) {
+        this.isDragging = true;
+        this.handleClick(x, y, gameInstance);
+    }
+    
+    handleMouseMove(x, y, gameInstance) {
+        if (this.isDragging) {
+            const rect = this.canvas.getBoundingClientRect();
+            const canvasX = x - rect.left;
+            const canvasY = y - rect.top;
+            
+            const cellX = Math.floor(canvasX / this.cellSize);
+            const cellY = Math.floor(canvasY / this.cellSize);
+            
+            if (cellX >= 0 && cellX < this.maze.width && cellY >= 0 && cellY < this.maze.height) {
+                // Only paint if we moved to a different cell
+                if (cellX !== this.lastPaintX || cellY !== this.lastPaintY) {
+                    this.cursorX = cellX;
+                    this.cursorY = cellY;
+                    this.toggleCell(false); // Don't save state for each drag cell
+                    this.lastPaintX = cellX;
+                    this.lastPaintY = cellY;
+                    if (gameInstance) {
+                        gameInstance.updateEditorUI();
+                    }
+                }
+            }
+        }
+    }
+    
+    handleMouseUp() {
+        if (this.isDragging) {
+            this.isDragging = false;
+            this.saveState(); // Save state after drag is complete
+        }
+    }
+    
+    clearMaze() {
+        // Clear all walls except outer border
+        for (let y = 1; y < this.maze.height - 1; y++) {
+            for (let x = 1; x < this.maze.width - 1; x++) {
+                this.maze.setWall(x, y, false);
+            }
+        }
+        this.saveState();
+    }
+    
+    resetMaze() {
+        // Reset to default maze
+        this.maze.generateDefault();
+        this.saveState();
     }
 }
 
@@ -477,11 +590,74 @@ class Game {
             this.renderer.asciiMode = e.target.checked;
         });
         
-        // Editor canvas click
-        this.editorCanvas.addEventListener('click', (e) => {
+        // Editor mode button
+        document.getElementById('editor-mode-btn').addEventListener('click', () => {
+            this.mode = 'editor';
+            this.updateUI();
+        });
+        
+        // Close editor button
+        document.getElementById('close-editor-btn').addEventListener('click', () => {
+            this.mode = 'game';
+            this.updateUI();
+        });
+        
+        // Editor canvas interactions
+        this.editorCanvas.addEventListener('mousedown', (e) => {
             if (this.mode === 'editor') {
+                this.editor.handleMouseDown(e.clientX, e.clientY, this);
+            }
+        });
+        
+        this.editorCanvas.addEventListener('mousemove', (e) => {
+            if (this.mode === 'editor') {
+                this.editor.handleMouseMove(e.clientX, e.clientY, this);
+            }
+        });
+        
+        this.editorCanvas.addEventListener('mouseup', () => {
+            if (this.mode === 'editor') {
+                this.editor.handleMouseUp();
+            }
+        });
+        
+        this.editorCanvas.addEventListener('mouseleave', () => {
+            if (this.mode === 'editor') {
+                this.editor.handleMouseUp();
+            }
+        });
+        
+        // Editor canvas click (fallback)
+        this.editorCanvas.addEventListener('click', (e) => {
+            if (this.mode === 'editor' && !this.editor.isDragging) {
                 this.editor.handleClick(e.clientX, e.clientY, this);
             }
+        });
+        
+        // Drag and drop for file loading
+        const dropZone = document.getElementById('drop-zone');
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file && (file.type === 'application/json' || file.name.endsWith('.json'))) {
+                this.loadMazeFile(file);
+            } else {
+                alert('Please drop a valid JSON file');
+            }
+        });
+        
+        dropZone.addEventListener('click', () => {
+            document.getElementById('file-input').click();
         });
         
         // Handle fullscreen change events
@@ -527,6 +703,34 @@ class Game {
             this.updateEditorUI();
         });
         
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            if (confirm('Clear all walls? (This cannot be undone)')) {
+                this.editor.clearMaze();
+                this.updateEditorUI();
+            }
+        });
+        
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            if (confirm('Reset to default maze? (This cannot be undone)')) {
+                this.editor.resetMaze();
+                this.player.x = this.maze.start_pos[0] + 0.5;
+                this.player.y = this.maze.start_pos[1] + 0.5;
+                this.updateEditorUI();
+            }
+        });
+        
+        document.getElementById('undo-btn').addEventListener('click', () => {
+            if (this.editor.undo()) {
+                this.updateEditorUI();
+            }
+        });
+        
+        document.getElementById('redo-btn').addEventListener('click', () => {
+            if (this.editor.redo()) {
+                this.updateEditorUI();
+            }
+        });
+        
         document.getElementById('save-btn').addEventListener('click', () => {
             this.maze.save();
         });
@@ -538,20 +742,33 @@ class Game {
         document.getElementById('file-input').addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const data = JSON.parse(event.target.result);
-                        this.maze.load(data);
-                        this.player.x = this.maze.start_pos[0] + 0.5;
-                        this.player.y = this.maze.start_pos[1] + 0.5;
-                        this.editor = new Editor(this.maze, this.editorCanvas);
-                        alert('Maze loaded successfully!');
-                    } catch (error) {
-                        alert('Error loading maze: ' + error.message);
+                this.loadMazeFile(file);
+            }
+        });
+        
+        // Keyboard shortcuts for editor
+        document.addEventListener('keydown', (e) => {
+            if (this.mode === 'editor') {
+                if (e.ctrlKey || e.metaKey) {
+                    if (e.key === 'z' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (this.editor.undo()) {
+                            this.updateEditorUI();
+                        }
+                    } else if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
+                        e.preventDefault();
+                        if (this.editor.redo()) {
+                            this.updateEditorUI();
+                        }
+                    } else if (e.key === 's') {
+                        e.preventDefault();
+                        this.maze.save();
                     }
-                };
-                reader.readAsText(file);
+                } else if (e.key === ' ') {
+                    e.preventDefault();
+                    this.editor.toggleCell();
+                    this.updateEditorUI();
+                }
             }
         });
     }
@@ -694,14 +911,41 @@ class Game {
     updateUI() {
         const modeText = document.getElementById('mode-text');
         const editorContainer = document.getElementById('editor-container');
+        const editorModeBtn = document.getElementById('editor-mode-btn');
         
         if (this.mode === 'game') {
             modeText.textContent = 'GAME MODE';
             editorContainer.style.display = 'none';
+            editorModeBtn.style.display = 'block';
         } else {
             modeText.textContent = 'EDITOR MODE';
             editorContainer.style.display = 'block';
+            editorModeBtn.style.display = 'none';
         }
+    }
+    
+    loadMazeFile(file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                this.maze.load(data);
+                this.player.x = this.maze.start_pos[0] + 0.5;
+                this.player.y = this.maze.start_pos[1] + 0.5;
+                this.editor = new Editor(this.maze, this.editorCanvas);
+                this.updateEditorUI();
+                // Show success message
+                const dropZone = document.getElementById('drop-zone');
+                const originalText = dropZone.querySelector('.drop-zone-text').textContent;
+                dropZone.querySelector('.drop-zone-text').textContent = '✓ Maze loaded!';
+                setTimeout(() => {
+                    dropZone.querySelector('.drop-zone-text').textContent = originalText;
+                }, 2000);
+            } catch (error) {
+                alert('Error loading maze: ' + error.message);
+            }
+        };
+        reader.readAsText(file);
     }
     
     updateEditorUI() {
@@ -709,6 +953,9 @@ class Game {
         const eraseBtn = document.getElementById('erase-mode-btn');
         const editorMode = document.getElementById('editor-mode');
         const cursorPos = document.getElementById('cursor-pos');
+        const historyCount = document.getElementById('history-count');
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
         
         if (this.editor.mode === 'draw') {
             drawBtn.classList.add('active');
@@ -720,6 +967,11 @@ class Game {
         
         editorMode.textContent = this.editor.mode.toUpperCase();
         cursorPos.textContent = `${this.editor.cursorX}, ${this.editor.cursorY}`;
+        historyCount.textContent = this.editor.historyIndex + 1;
+        
+        // Update undo/redo button states
+        undoBtn.disabled = this.editor.historyIndex <= 0;
+        redoBtn.disabled = this.editor.historyIndex >= this.editor.history.length - 1;
     }
     
     render() {
