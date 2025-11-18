@@ -91,6 +91,16 @@ class Player {
         this.rotateSpeed = 0.05;
     }
     
+    normalizeAngle() {
+        // Normalize angle to 0-2π range
+        while (this.angle < 0) {
+            this.angle += Math.PI * 2;
+        }
+        while (this.angle >= Math.PI * 2) {
+            this.angle -= Math.PI * 2;
+        }
+    }
+    
     moveForward(maze, distance) {
         const newX = this.x + Math.cos(this.angle) * distance;
         const newY = this.y + Math.sin(this.angle) * distance;
@@ -144,6 +154,7 @@ class Renderer {
         this.height = height;
         this.depth = 16;
         this.shades = " .:-=+*#%@";
+        this.asciiMode = false; // Toggle for pure ASCII rendering
         
         // Set up canvas
         canvas.width = width;
@@ -181,6 +192,7 @@ class Renderer {
         
         const numColumns = Math.floor(this.width / 10); // Adjust column count based on width
         const columnWidth = this.width / numColumns;
+        const charHeight = 12; // Height for ASCII characters
         
         for (let col = 0; col < numColumns; col++) {
             const rayAngle = player.angle - player.fov / 2 + (col / numColumns) * player.fov;
@@ -189,24 +201,49 @@ class Renderer {
             const wallHeight = Math.min(this.height / (distance + 0.0001), this.height);
             const ceiling = (this.height - wallHeight) / 2;
             
-            // Draw ceiling
-            this.ctx.fillStyle = '#1a1a2e';
-            this.ctx.fillRect(col * columnWidth, 0, columnWidth, ceiling);
-            
-            // Draw wall
-            const shadeIdx = Math.min(Math.floor((distance / this.depth) * (this.shades.length - 1)), this.shades.length - 1);
-            const shade = this.shades[shadeIdx];
-            const brightness = 1 - (distance / this.depth) * 0.7;
-            this.ctx.fillStyle = `rgba(0, 255, 136, ${brightness})`;
-            this.ctx.fillRect(col * columnWidth, ceiling, columnWidth, wallHeight);
-            
-            // Draw wall pattern (ASCII-like)
-            this.ctx.fillStyle = `rgba(0, 0, 0, ${0.3 + distance / this.depth * 0.3})`;
-            this.ctx.fillText(shade, col * columnWidth + columnWidth / 2, ceiling + wallHeight / 2);
-            
-            // Draw floor
-            this.ctx.fillStyle = `rgba(45, 45, 68, ${brightness * 0.5})`;
-            this.ctx.fillRect(col * columnWidth, ceiling + wallHeight, columnWidth, this.height - ceiling - wallHeight);
+            if (this.asciiMode) {
+                // Pure ASCII mode - no colors, just white characters on black
+                this.ctx.fillStyle = '#fff';
+                
+                // Draw ceiling with spaces
+                for (let row = 0; row < ceiling; row += charHeight) {
+                    this.ctx.fillText(' ', col * columnWidth + columnWidth / 2, row + charHeight / 2);
+                }
+                
+                // Draw wall with ASCII characters based on distance
+                const shadeIdx = Math.min(Math.floor((distance / this.depth) * (this.shades.length - 1)), this.shades.length - 1);
+                const shade = this.shades[shadeIdx];
+                
+                // Fill wall with ASCII characters (multiple rows for better coverage)
+                for (let row = ceiling; row < ceiling + wallHeight; row += charHeight) {
+                    this.ctx.fillText(shade, col * columnWidth + columnWidth / 2, row + charHeight / 2);
+                }
+                
+                // Draw floor with dots
+                for (let row = ceiling + wallHeight; row < this.height; row += charHeight) {
+                    this.ctx.fillText('.', col * columnWidth + columnWidth / 2, row + charHeight / 2);
+                }
+            } else {
+                // Colored mode (original)
+                // Draw ceiling
+                this.ctx.fillStyle = '#1a1a2e';
+                this.ctx.fillRect(col * columnWidth, 0, columnWidth, ceiling);
+                
+                // Draw wall
+                const shadeIdx = Math.min(Math.floor((distance / this.depth) * (this.shades.length - 1)), this.shades.length - 1);
+                const shade = this.shades[shadeIdx];
+                const brightness = 1 - (distance / this.depth) * 0.7;
+                this.ctx.fillStyle = `rgba(0, 255, 136, ${brightness})`;
+                this.ctx.fillRect(col * columnWidth, ceiling, columnWidth, wallHeight);
+                
+                // Draw wall pattern (ASCII-like)
+                this.ctx.fillStyle = `rgba(0, 0, 0, ${0.3 + distance / this.depth * 0.3})`;
+                this.ctx.fillText(shade, col * columnWidth + columnWidth / 2, ceiling + wallHeight / 2);
+                
+                // Draw floor
+                this.ctx.fillStyle = `rgba(45, 45, 68, ${brightness * 0.5})`;
+                this.ctx.fillRect(col * columnWidth, ceiling + wallHeight, columnWidth, this.height - ceiling - wallHeight);
+            }
         }
     }
     
@@ -350,6 +387,9 @@ class Game {
         this.maze.generateDefault();
         this.setupEventListeners();
         this.gameLoop();
+        
+        // Initialize player angle normalization
+        this.player.normalizeAngle();
     }
     
     setupEventListeners() {
@@ -430,6 +470,11 @@ class Game {
         // Fullscreen button
         document.getElementById('fullscreen-btn').addEventListener('click', () => {
             this.toggleFullscreen();
+        });
+        
+        // ASCII mode toggle
+        document.getElementById('ascii-mode-toggle').addEventListener('change', (e) => {
+            this.renderer.asciiMode = e.target.checked;
         });
         
         // Editor canvas click
@@ -520,8 +565,14 @@ class Game {
             if (this.keys['a']) this.player.strafeLeft(this.maze, this.player.moveSpeed);
             if (this.keys['d']) this.player.strafeRight(this.maze, this.player.moveSpeed);
             // Rotation with Q/E or Arrow keys
-            if (this.keys['q'] || this.keys['arrowleft']) this.player.angle -= this.player.rotateSpeed;
-            if (this.keys['e'] || this.keys['arrowright']) this.player.angle += this.player.rotateSpeed;
+            if (this.keys['q'] || this.keys['arrowleft']) {
+                this.player.angle -= this.player.rotateSpeed;
+                this.player.normalizeAngle();
+            }
+            if (this.keys['e'] || this.keys['arrowright']) {
+                this.player.angle += this.player.rotateSpeed;
+                this.player.normalizeAngle();
+            }
             
             // Debounce mode toggle
             if (this.keys['m'] && (now - this.lastModeToggle) > this.modeToggleDelay) {
