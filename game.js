@@ -41,7 +41,14 @@ class Maze {
         const ix = Math.floor(x);
         const iy = Math.floor(y);
         if (ix >= 0 && ix < this.width && iy >= 0 && iy < this.height) {
-            this.grid[iy][ix] = isWall ? 1 : 0;
+            if (isWall) {
+                this.grid[iy][ix] = 1;
+            } else {
+                // Only clear if it's currently a wall
+                if (this.grid[iy][ix] === 1) {
+                    this.grid[iy][ix] = 0;
+                }
+            }
         }
     }
     
@@ -49,7 +56,14 @@ class Maze {
         const ix = Math.floor(x);
         const iy = Math.floor(y);
         if (ix >= 0 && ix < this.width && iy >= 0 && iy < this.height) {
-            this.grid[iy][ix] = isRamp ? 2 : 0;
+            if (isRamp) {
+                this.grid[iy][ix] = 2;
+            } else {
+                // Only clear if it's currently a ramp
+                if (this.grid[iy][ix] === 2) {
+                    this.grid[iy][ix] = 0;
+                }
+            }
         }
     }
     
@@ -347,7 +361,6 @@ class Editor {
     constructor(maze, canvas) {
         this.maze = maze;
         this.canvas = canvas;
-        this.ctx = canvas.getContext('2d');
         this.cursorX = 1;
         this.cursorY = 1;
         this.mode = 'draw';
@@ -359,13 +372,12 @@ class Editor {
         this.historyIndex = -1;
         this.maxHistory = 50;
         
+        // Set canvas dimensions first (this clears the canvas)
         canvas.width = 600;
         canvas.height = 600;
         
-        // Ensure context is set
-        if (!this.ctx) {
-            this.ctx = canvas.getContext('2d');
-        }
+        // Get context AFTER setting dimensions (setting width/height resets context)
+        this.ctx = canvas.getContext('2d');
         
         // Save initial state
         this.saveState();
@@ -423,25 +435,28 @@ class Editor {
     
     render() {
         // Ensure canvas context is valid
-        if (!this.ctx) {
+        if (!this.ctx || !this.canvas) {
             this.ctx = this.canvas.getContext('2d');
         }
         
-        // Clear canvas
-        this.ctx.fillStyle = '#000';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        
         // Ensure cellSize is valid
-        if (!this.cellSize || this.cellSize <= 0) {
+        if (!this.cellSize || this.cellSize <= 0 || !isFinite(this.cellSize)) {
             this.cellSize = 600 / Math.max(this.maze.width, this.maze.height);
         }
         
         const cellSize = this.cellSize;
         
+        // Clear canvas
+        this.ctx.fillStyle = '#000';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
         // Draw grid
         for (let y = 0; y < this.maze.height; y++) {
             for (let x = 0; x < this.maze.width; x++) {
                 const cellType = this.maze.getCellType(x, y);
+                const drawX = x * cellSize;
+                const drawY = y * cellSize;
+                
                 if (cellType === 1) {
                     this.ctx.fillStyle = '#00ff88'; // Wall - green
                 } else if (cellType === 2) {
@@ -449,26 +464,28 @@ class Editor {
                 } else {
                     this.ctx.fillStyle = '#1a1a2e'; // Empty
                 }
-                this.ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                this.ctx.fillRect(drawX, drawY, cellSize, cellSize);
                 
                 // Draw ramp indicator
                 if (cellType === 2) {
                     this.ctx.fillStyle = '#fff';
-                    this.ctx.font = `${cellSize * 0.6}px monospace`;
+                    this.ctx.font = `${Math.max(8, cellSize * 0.6)}px monospace`;
                     this.ctx.textAlign = 'center';
                     this.ctx.textBaseline = 'middle';
-                    this.ctx.fillText('^', x * cellSize + cellSize / 2, y * cellSize + cellSize / 2);
-                    this.ctx.font = '10px monospace';
+                    this.ctx.fillText('^', drawX + cellSize / 2, drawY + cellSize / 2);
                 }
                 
                 // Grid lines
                 this.ctx.strokeStyle = '#333';
                 this.ctx.lineWidth = 1;
-                this.ctx.strokeRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                this.ctx.strokeRect(drawX, drawY, cellSize, cellSize);
             }
         }
         
         // Draw cursor
+        const cursorX = this.cursorX * cellSize;
+        const cursorY = this.cursorY * cellSize;
+        
         if (this.mode === 'draw') {
             this.ctx.fillStyle = 'rgba(0, 255, 136, 0.5)';
         } else if (this.mode === 'ramp') {
@@ -476,13 +493,22 @@ class Editor {
         } else {
             this.ctx.fillStyle = 'rgba(255, 0, 136, 0.5)';
         }
-        this.ctx.fillRect(this.cursorX * cellSize, this.cursorY * cellSize, cellSize, cellSize);
+        this.ctx.fillRect(cursorX, cursorY, cellSize, cellSize);
         this.ctx.strokeStyle = '#fff';
         this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(this.cursorX * cellSize, this.cursorY * cellSize, cellSize, cellSize);
+        this.ctx.strokeRect(cursorX, cursorY, cellSize, cellSize);
+        
+        // Reset font after drawing
+        this.ctx.font = '10px monospace';
     }
     
     toggleCell(saveState = true) {
+        // Ensure valid coordinates
+        if (this.cursorX < 0 || this.cursorX >= this.maze.width || 
+            this.cursorY < 0 || this.cursorY >= this.maze.height) {
+            return;
+        }
+        
         if (this.mode === 'draw') {
             this.maze.setWall(this.cursorX, this.cursorY, true);
             this.maze.setRamp(this.cursorX, this.cursorY, false);
@@ -490,9 +516,10 @@ class Editor {
             this.maze.setRamp(this.cursorX, this.cursorY, true);
             this.maze.setWall(this.cursorX, this.cursorY, false);
         } else {
-            this.maze.setWall(this.cursorX, this.cursorY, false);
-            this.maze.setRamp(this.cursorX, this.cursorY, false);
+            // Erase mode - clear both wall and ramp
+            this.maze.grid[this.cursorY][this.cursorX] = 0;
         }
+        
         if (saveState) {
             this.saveState();
         }
@@ -1083,10 +1110,12 @@ class Game {
                 // Update existing editor instead of creating new one
                 this.editor.maze = this.maze;
                 this.editor.cellSize = 600 / Math.max(this.maze.width, this.maze.height);
-                this.editor.cursorX = 1;
-                this.editor.cursorY = 1;
+                this.editor.cursorX = Math.min(1, this.maze.width - 1);
+                this.editor.cursorY = Math.min(1, this.maze.height - 1);
                 this.editor.history = [];
                 this.editor.historyIndex = -1;
+                // Re-get context after loading (in case canvas was reset)
+                this.editor.ctx = this.editorCanvas.getContext('2d');
                 this.editor.saveState(); // Save initial state
                 this.editor.render(); // Render the loaded maze
                 
