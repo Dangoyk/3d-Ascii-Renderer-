@@ -130,11 +130,11 @@ class Player {
     moveForward(maze, distance) {
         const newX = this.x + Math.cos(this.angle) * distance;
         const newY = this.y + Math.sin(this.angle) * distance;
-        // Allow movement through ramps, block on walls
-        if (!maze.isWall(newX, this.y)) {
+        // Block movement on walls and ramps (ramps raise you up)
+        if (!maze.isWall(newX, this.y) && !maze.isRamp(newX, this.y)) {
             this.x = newX;
         }
-        if (!maze.isWall(this.x, newY)) {
+        if (!maze.isWall(this.x, newY) && !maze.isRamp(this.x, newY)) {
             this.y = newY;
         }
     }
@@ -142,10 +142,10 @@ class Player {
     moveBackward(maze, distance) {
         const newX = this.x - Math.cos(this.angle) * distance;
         const newY = this.y - Math.sin(this.angle) * distance;
-        if (!maze.isWall(newX, this.y)) {
+        if (!maze.isWall(newX, this.y) && !maze.isRamp(newX, this.y)) {
             this.x = newX;
         }
-        if (!maze.isWall(this.x, newY)) {
+        if (!maze.isWall(this.x, newY) && !maze.isRamp(this.x, newY)) {
             this.y = newY;
         }
     }
@@ -153,10 +153,10 @@ class Player {
     strafeLeft(maze, distance) {
         const newX = this.x + Math.cos(this.angle - Math.PI / 2) * distance;
         const newY = this.y + Math.sin(this.angle - Math.PI / 2) * distance;
-        if (!maze.isWall(newX, this.y)) {
+        if (!maze.isWall(newX, this.y) && !maze.isRamp(newX, this.y)) {
             this.x = newX;
         }
-        if (!maze.isWall(this.x, newY)) {
+        if (!maze.isWall(this.x, newY) && !maze.isRamp(this.x, newY)) {
             this.y = newY;
         }
     }
@@ -164,10 +164,10 @@ class Player {
     strafeRight(maze, distance) {
         const newX = this.x + Math.cos(this.angle + Math.PI / 2) * distance;
         const newY = this.y + Math.sin(this.angle + Math.PI / 2) * distance;
-        if (!maze.isWall(newX, this.y)) {
+        if (!maze.isWall(newX, this.y) && !maze.isRamp(newX, this.y)) {
             this.x = newX;
         }
-        if (!maze.isWall(this.x, newY)) {
+        if (!maze.isWall(this.x, newY) && !maze.isRamp(this.x, newY)) {
             this.y = newY;
         }
     }
@@ -669,9 +669,24 @@ class Game {
             this.updateUI();
         });
         
+        // Close editor when clicking overlay background
+        const editorOverlay = document.getElementById('editor-modal-overlay');
+        editorOverlay.addEventListener('click', (e) => {
+            if (e.target.id === 'editor-modal-overlay') {
+                this.mode = 'game';
+                this.updateUI();
+            }
+        });
+        
+        // Prevent clicks inside editor container from closing modal
+        document.getElementById('editor-container').addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+        
         // Editor canvas interactions
         this.editorCanvas.addEventListener('mousedown', (e) => {
             if (this.mode === 'editor') {
+                e.stopPropagation(); // Prevent closing modal
                 this.editor.handleMouseDown(e.clientX, e.clientY, this);
             }
         });
@@ -865,7 +880,7 @@ class Game {
             
             // Debounce mode toggle
             if (this.keys['m'] && (now - this.lastModeToggle) > this.modeToggleDelay) {
-                this.mode = 'editor';
+                this.mode = this.mode === 'game' ? 'editor' : 'game';
                 this.lastModeToggle = now;
                 this.keys['m'] = false; // Clear the key to prevent rapid toggling
                 this.updateUI();
@@ -982,17 +997,17 @@ class Game {
     
     updateUI() {
         const modeText = document.getElementById('mode-text');
-        const editorContainer = document.getElementById('editor-container');
+        const editorOverlay = document.getElementById('editor-modal-overlay');
         const editorModeBtn = document.getElementById('editor-mode-btn');
         
         if (this.mode === 'game') {
             modeText.textContent = 'GAME MODE';
-            editorContainer.style.display = 'none';
+            editorOverlay.style.display = 'none';
             editorModeBtn.style.display = 'block';
         } else {
             modeText.textContent = 'EDITOR MODE';
-            editorContainer.style.display = 'block';
-            editorModeBtn.style.display = 'none';
+            editorOverlay.style.display = 'flex';
+            editorModeBtn.style.display = 'block';
         }
     }
     
