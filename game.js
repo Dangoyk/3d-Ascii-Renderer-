@@ -362,8 +362,16 @@ class Editor {
         canvas.width = 600;
         canvas.height = 600;
         
+        // Ensure context is set
+        if (!this.ctx) {
+            this.ctx = canvas.getContext('2d');
+        }
+        
         // Save initial state
         this.saveState();
+        
+        // Initial render
+        this.render();
     }
     
     saveState() {
@@ -414,8 +422,19 @@ class Editor {
     }
     
     render() {
+        // Ensure canvas context is valid
+        if (!this.ctx) {
+            this.ctx = this.canvas.getContext('2d');
+        }
+        
+        // Clear canvas
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Ensure cellSize is valid
+        if (!this.cellSize || this.cellSize <= 0) {
+            this.cellSize = 600 / Math.max(this.maze.width, this.maze.height);
+        }
         
         const cellSize = this.cellSize;
         
@@ -493,6 +512,11 @@ class Editor {
         const canvasX = x - rect.left;
         const canvasY = y - rect.top;
         
+        // Ensure cellSize is valid
+        if (!this.cellSize || this.cellSize <= 0) {
+            this.cellSize = 600 / Math.max(this.maze.width, this.maze.height);
+        }
+        
         const cellX = Math.floor(canvasX / this.cellSize);
         const cellY = Math.floor(canvasY / this.cellSize);
         
@@ -518,6 +542,11 @@ class Editor {
             const rect = this.canvas.getBoundingClientRect();
             const canvasX = x - rect.left;
             const canvasY = y - rect.top;
+            
+            // Ensure cellSize is valid
+            if (!this.cellSize || this.cellSize <= 0) {
+                this.cellSize = 600 / Math.max(this.maze.width, this.maze.height);
+            }
             
             const cellX = Math.floor(canvasX / this.cellSize);
             const cellY = Math.floor(canvasY / this.cellSize);
@@ -1037,6 +1066,8 @@ class Game {
             modeText.textContent = 'EDITOR MODE';
             editorOverlay.style.display = 'flex';
             editorModeBtn.style.display = 'block';
+            // Force render when opening editor
+            this.editor.render();
         }
     }
     
@@ -1048,7 +1079,23 @@ class Game {
                 this.maze.load(data);
                 this.player.x = this.maze.start_pos[0] + 0.5;
                 this.player.y = this.maze.start_pos[1] + 0.5;
-                this.editor = new Editor(this.maze, this.editorCanvas);
+                
+                // Update existing editor instead of creating new one
+                this.editor.maze = this.maze;
+                this.editor.cellSize = 600 / Math.max(this.maze.width, this.maze.height);
+                this.editor.cursorX = 1;
+                this.editor.cursorY = 1;
+                this.editor.history = [];
+                this.editor.historyIndex = -1;
+                this.editor.saveState(); // Save initial state
+                this.editor.render(); // Render the loaded maze
+                
+                // Reset file input so it can be used again
+                const fileInput = document.getElementById('file-input');
+                if (fileInput) {
+                    fileInput.value = '';
+                }
+                
                 this.updateEditorUI();
                 // Show success message
                 const dropZone = document.getElementById('drop-zone');
