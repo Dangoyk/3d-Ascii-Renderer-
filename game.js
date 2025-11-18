@@ -4,7 +4,7 @@ class Maze {
     constructor(width = 20, height = 20) {
         this.width = width;
         this.height = height;
-        // Initialize as empty (0 = empty, 1 = wall)
+        // Initialize as empty (0 = empty, 1 = wall, 2 = ramp)
         this.grid = Array(height).fill(null).map(() => Array(width).fill(0));
         this.start_pos = [1, 1];
         this.end_pos = [width - 2, height - 2];
@@ -19,11 +19,37 @@ class Maze {
         return this.grid[iy][ix] === 1;
     }
     
+    isRamp(x, y) {
+        const ix = Math.floor(x);
+        const iy = Math.floor(y);
+        if (ix < 0 || ix >= this.width || iy < 0 || iy >= this.height) {
+            return false;
+        }
+        return this.grid[iy][ix] === 2;
+    }
+    
+    getCellType(x, y) {
+        const ix = Math.floor(x);
+        const iy = Math.floor(y);
+        if (ix < 0 || ix >= this.width || iy < 0 || iy >= this.height) {
+            return 1; // Wall
+        }
+        return this.grid[iy][ix];
+    }
+    
     setWall(x, y, isWall) {
         const ix = Math.floor(x);
         const iy = Math.floor(y);
         if (ix >= 0 && ix < this.width && iy >= 0 && iy < this.height) {
             this.grid[iy][ix] = isWall ? 1 : 0;
+        }
+    }
+    
+    setRamp(x, y, isRamp) {
+        const ix = Math.floor(x);
+        const iy = Math.floor(y);
+        if (ix >= 0 && ix < this.width && iy >= 0 && iy < this.height) {
+            this.grid[iy][ix] = isRamp ? 2 : 0;
         }
     }
     
@@ -104,6 +130,7 @@ class Player {
     moveForward(maze, distance) {
         const newX = this.x + Math.cos(this.angle) * distance;
         const newY = this.y + Math.sin(this.angle) * distance;
+        // Allow movement through ramps, block on walls
         if (!maze.isWall(newX, this.y)) {
             this.x = newX;
         }
@@ -154,6 +181,8 @@ class Renderer {
         this.height = height;
         this.depth = 16;
         this.shades = " .:-=+*#%@";
+        // Extended shades for better gradient
+        this.asciiShades = " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
         this.asciiMode = false; // Toggle for pure ASCII rendering
         
         // Set up canvas
@@ -177,13 +206,17 @@ class Renderer {
             x += dx * stepSize;
             y += dy * stepSize;
             
-            if (maze.isWall(x, y)) {
+            const cellType = maze.getCellType(x, y);
+            if (cellType === 1) { // Wall
                 const distance = Math.sqrt((x - startX) ** 2 + (y - startY) ** 2);
-                return distance * Math.cos(rayAngle - playerAngle);
+                return { distance: distance * Math.cos(rayAngle - playerAngle), type: 1 };
+            } else if (cellType === 2) { // Ramp
+                const distance = Math.sqrt((x - startX) ** 2 + (y - startY) ** 2);
+                return { distance: distance * Math.cos(rayAngle - playerAngle), type: 2 };
             }
         }
         
-        return maxDistance;
+        return { distance: maxDistance, type: 0 };
     }
     
     render3D(maze, player) {
@@ -192,35 +225,47 @@ class Renderer {
         
         const numColumns = Math.floor(this.width / 10); // Adjust column count based on width
         const columnWidth = this.width / numColumns;
-        const charHeight = 12; // Height for ASCII characters
+        const charHeight = 10; // Reduced for better coverage
         
         for (let col = 0; col < numColumns; col++) {
             const rayAngle = player.angle - player.fov / 2 + (col / numColumns) * player.fov;
-            const distance = this.castRay(maze, player.x, player.y, rayAngle, player.angle);
+            const hit = this.castRay(maze, player.x, player.y, rayAngle, player.angle);
+            const distance = hit.distance;
+            const hitType = hit.type;
             
             const wallHeight = Math.min(this.height / (distance + 0.0001), this.height);
             const ceiling = (this.height - wallHeight) / 2;
             
             if (this.asciiMode) {
-                // Pure ASCII mode - no colors, just white characters on black
-                this.ctx.fillStyle = '#fff';
+                // ASCII mode with color gradient
+                const normalizedDist = Math.min(distance / this.depth, 1);
+                const shadeIdx = Math.floor(normalizedDist * (this.asciiShades.length - 1));
+                const shade = this.asciiShades[shadeIdx];
                 
-                // Draw ceiling with spaces
+                // Calculate brightness for color gradient (0-1)
+                const brightness = 1 - normalizedDist * 0.8;
+                
+                // Use grayscale gradient for ASCII mode
+                const grayValue = Math.floor(brightness * 255);
+                this.ctx.fillStyle = `rgb(${grayValue}, ${grayValue}, ${grayValue})`;
+                
+                // Draw ceiling
                 for (let row = 0; row < ceiling; row += charHeight) {
                     this.ctx.fillText(' ', col * columnWidth + columnWidth / 2, row + charHeight / 2);
                 }
                 
-                // Draw wall with ASCII characters based on distance
-                const shadeIdx = Math.min(Math.floor((distance / this.depth) * (this.shades.length - 1)), this.shades.length - 1);
-                const shade = this.shades[shadeIdx];
-                
-                // Fill wall with ASCII characters (multiple rows for better coverage)
-                for (let row = ceiling; row < ceiling + wallHeight; row += charHeight) {
-                    this.ctx.fillText(shade, col * columnWidth + columnWidth / 2, row + charHeight / 2);
+                // Draw wall/ramp with ASCII characters
+                const wallChar = hitType === 2 ? '^' : shade; // Use ^ for ramps
+                for (let row = Math.floor(ceiling); row < Math.floor(ceiling + wallHeight); row += charHeight) {
+                    this.ctx.fillText(wallChar, col * columnWidth + columnWidth / 2, row + charHeight / 2);
                 }
                 
-                // Draw floor with dots
-                for (let row = ceiling + wallHeight; row < this.height; row += charHeight) {
+                // Draw floor with gradient
+                for (let row = Math.floor(ceiling + wallHeight); row < this.height; row += charHeight) {
+                    const floorDist = (row - ceiling - wallHeight) / (this.height - ceiling - wallHeight);
+                    const floorBrightness = brightness * (1 - floorDist * 0.5);
+                    const floorGray = Math.floor(floorBrightness * 200);
+                    this.ctx.fillStyle = `rgb(${floorGray}, ${floorGray}, ${floorGray})`;
                     this.ctx.fillText('.', col * columnWidth + columnWidth / 2, row + charHeight / 2);
                 }
             } else {
@@ -229,16 +274,23 @@ class Renderer {
                 this.ctx.fillStyle = '#1a1a2e';
                 this.ctx.fillRect(col * columnWidth, 0, columnWidth, ceiling);
                 
-                // Draw wall
+                // Draw wall/ramp
                 const shadeIdx = Math.min(Math.floor((distance / this.depth) * (this.shades.length - 1)), this.shades.length - 1);
                 const shade = this.shades[shadeIdx];
                 const brightness = 1 - (distance / this.depth) * 0.7;
-                this.ctx.fillStyle = `rgba(0, 255, 136, ${brightness})`;
+                
+                // Different color for ramps
+                if (hitType === 2) {
+                    this.ctx.fillStyle = `rgba(255, 200, 0, ${brightness})`; // Yellow/orange for ramps
+                } else {
+                    this.ctx.fillStyle = `rgba(0, 255, 136, ${brightness})`;
+                }
                 this.ctx.fillRect(col * columnWidth, ceiling, columnWidth, wallHeight);
                 
                 // Draw wall pattern (ASCII-like)
                 this.ctx.fillStyle = `rgba(0, 0, 0, ${0.3 + distance / this.depth * 0.3})`;
-                this.ctx.fillText(shade, col * columnWidth + columnWidth / 2, ceiling + wallHeight / 2);
+                const patternChar = hitType === 2 ? '^' : shade;
+                this.ctx.fillText(patternChar, col * columnWidth + columnWidth / 2, ceiling + wallHeight / 2);
                 
                 // Draw floor
                 this.ctx.fillStyle = `rgba(45, 45, 68, ${brightness * 0.5})`;
@@ -260,10 +312,13 @@ class Renderer {
         // Draw maze
         for (let y = 0; y < maze.height; y++) {
             for (let x = 0; x < maze.width; x++) {
-                if (maze.isWall(x, y)) {
-                    ctx.fillStyle = '#00ff88';
+                const cellType = maze.getCellType(x, y);
+                if (cellType === 1) {
+                    ctx.fillStyle = '#00ff88'; // Wall
+                } else if (cellType === 2) {
+                    ctx.fillStyle = '#ffaa00'; // Ramp
                 } else {
-                    ctx.fillStyle = '#1a1a2e';
+                    ctx.fillStyle = '#1a1a2e'; // Empty
                 }
                 ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
             }
@@ -381,7 +436,13 @@ class Editor {
         }
         
         // Draw cursor
-        this.ctx.fillStyle = this.mode === 'draw' ? 'rgba(0, 255, 136, 0.5)' : 'rgba(255, 0, 136, 0.5)';
+        if (this.mode === 'draw') {
+            this.ctx.fillStyle = 'rgba(0, 255, 136, 0.5)';
+        } else if (this.mode === 'ramp') {
+            this.ctx.fillStyle = 'rgba(255, 200, 0, 0.5)';
+        } else {
+            this.ctx.fillStyle = 'rgba(255, 0, 136, 0.5)';
+        }
         this.ctx.fillRect(this.cursorX * cellSize, this.cursorY * cellSize, cellSize, cellSize);
         this.ctx.strokeStyle = '#fff';
         this.ctx.lineWidth = 2;
@@ -391,8 +452,13 @@ class Editor {
     toggleCell(saveState = true) {
         if (this.mode === 'draw') {
             this.maze.setWall(this.cursorX, this.cursorY, true);
+            this.maze.setRamp(this.cursorX, this.cursorY, false);
+        } else if (this.mode === 'ramp') {
+            this.maze.setRamp(this.cursorX, this.cursorY, true);
+            this.maze.setWall(this.cursorX, this.cursorY, false);
         } else {
             this.maze.setWall(this.cursorX, this.cursorY, false);
+            this.maze.setRamp(this.cursorX, this.cursorY, false);
         }
         if (saveState) {
             this.saveState();
@@ -462,10 +528,11 @@ class Editor {
     }
     
     clearMaze() {
-        // Clear all walls except outer border
+        // Clear all walls and ramps except outer border
         for (let y = 1; y < this.maze.height - 1; y++) {
             for (let x = 1; x < this.maze.width - 1; x++) {
                 this.maze.setWall(x, y, false);
+                this.maze.setRamp(x, y, false);
             }
         }
         this.saveState();
@@ -700,6 +767,11 @@ class Game {
         
         document.getElementById('erase-mode-btn').addEventListener('click', () => {
             this.editor.mode = 'erase';
+            this.updateEditorUI();
+        });
+        
+        document.getElementById('ramp-mode-btn').addEventListener('click', () => {
+            this.editor.mode = 'ramp';
             this.updateEditorUI();
         });
         
@@ -951,17 +1023,24 @@ class Game {
     updateEditorUI() {
         const drawBtn = document.getElementById('draw-mode-btn');
         const eraseBtn = document.getElementById('erase-mode-btn');
+        const rampBtn = document.getElementById('ramp-mode-btn');
         const editorMode = document.getElementById('editor-mode');
         const cursorPos = document.getElementById('cursor-pos');
         const historyCount = document.getElementById('history-count');
         const undoBtn = document.getElementById('undo-btn');
         const redoBtn = document.getElementById('redo-btn');
         
+        // Reset all buttons
+        drawBtn.classList.remove('active');
+        eraseBtn.classList.remove('active');
+        rampBtn.classList.remove('active');
+        
+        // Activate current mode
         if (this.editor.mode === 'draw') {
             drawBtn.classList.add('active');
-            eraseBtn.classList.remove('active');
+        } else if (this.editor.mode === 'ramp') {
+            rampBtn.classList.add('active');
         } else {
-            drawBtn.classList.remove('active');
             eraseBtn.classList.add('active');
         }
         
